@@ -17,7 +17,7 @@ class MyModel:
         return []
 
     @classmethod
-    def load_test_data(cls, fname):
+    def load_test_data(cls, fname): 
         # your code here
         data = []
         with open(fname) as f:
