@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import tqdm
+from torch.utils.data import TensorDataset, DataLoader
+from tqdm import tqdm
 import random
 import os
 
@@ -14,15 +15,17 @@ output_file = "cse447-project/evaluation/output.txt"
 
 encoding = 'utf-8'
 
-def encode(s) -> torch.tensor:
-    res = []
-    for line in s:
+def encode(s):
+    res = [] 
+    for line in tqdm(s, "Encoding"):
+        if "\n" in line:
+            line = line.rstrip("\n")
         char_encode = []
         for c in line:
             if ord(c) < vocab_size:
                 char_encode.append(ord(c))
-        res.append(char_encode)
-    return torch.tensor(res, dtype=torch.long)
+        res.append(torch.tensor(char_encode, dtype=torch.long))
+    return res
 
 def decode(tensor: torch.Tensor) -> str:
     return ''.join(chr(c) for c in tensor.item())
@@ -37,11 +40,20 @@ val_data = data[n:]
 
 def get_batch(split):
     d = train_data if split == 'train' else val_data
-    for line in train_data:
-        idx = random.randint(0, len(line) - block_size) 
-        x = torch.stack(d[idx : idx+block_size])
-        y = torch.stack(d[idx+1 : idx+block_size+1])
-    return x.to(device), y.to(device)
+    x = []
+    y = []
+    for line in tqdm(d, "Getting Batch"):
+        if len(line) <= block_size + 1:
+            continue
+        idx = random.randint(0, len(line) - block_size - 1)
+        x.append(line[idx : idx+block_size])
+        y.append(line[idx+1 : idx+block_size+1])
+    x_tensor = torch.stack(x)
+    y_tensor = torch.stack(y)
+    return x_tensor.to(device), y_tensor.to(device)
+
+x_t, y_t = get_batch('train')
+x_v, y_v = get_batch('val')
 
 class Transformer_Model(nn.Module):
     def __init__(self):
@@ -52,7 +64,7 @@ class Transformer_Model(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=n_embd,
             nhead=n_head,
-            dim_feedforward=mlr_layer,
+            dim_feedforward=mlp_layer,
             dropout=dropout,
             activation="gelu",
             batch_first=True,
@@ -60,7 +72,7 @@ class Transformer_Model(nn.Module):
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer,
-            num_layers=n_layer,
+            num_layers=n_modules,
         )
         self.norm = nn.LayerNorm(n_embd)
         self.head = nn.Linear(n_embd, vocab_size)
@@ -114,20 +126,29 @@ def predict_next(model, idx):
 def estimate_loss(model):
     out = {}
     model.eval()
-    for split in ['train', 'val']:
-        losses = []
-        for _ in range(eval_iters):
-            xb, yb = get_batch(split)
-            _, loss = model(xb, yb)
-            losses.append(loss.item())
-        out[split] = sum(losses) / len(losses)
+
+    dataloader = DataLoader(TensorDataset(x_t, y_t), batch_size=batch_size)
+    losses = []
+    for xb, yb in tqdm(dataloader, "Loss estimation (Train)"):
+        _, loss = model(xb, yb)
+        losses.append(loss.item())
+    out['train'] = sum(losses) / len(losses)
+
+    dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size)
+    losses = []
+    for xb, yb in tqdm(dataloader, "Loss estimation (Val)"):
+        _, loss = model(xb, yb)
+        losses.append(loss.item())
+    out['val'] = sum(losses) / len(losses)
     model.train()
+
     return out
 
 def train():
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
-
+    checkpoint_path = "cse447-project/checkpoints/model_checkpoint.pt"
+    
     start_step = 0
     if os.path.isfile(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -139,28 +160,36 @@ def train():
         print("No checkpoint")
 
     model.train()
+    train_dataloader = DataLoader(TensorDataset(x_t, y_t), batch_size=batch_size)
     for step in range(start_step, max_iters):
+        for x_batch, y_batch in tqdm(train_dataloader, desc="Epoch Progress"):
+            logits, loss = model(x_batch, y_batch)
+
+            model.optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            model.optimizer.step()
+
         if step % eval_interval == 0 or step == max_iters - 1:
             losses = estimate_loss(model)
             print(f"Step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+            checkpoint_path = f"C:/Users/st3by/Documents/CSE447/cse447-project/checkpoints/model_checkpoint_{step}.pt"
+
+            log_path = "cse447-project/loss_log.txt"
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"Epoch {step}: Train Loss: {losses['train']:.4f}, Val Loss: {losses['val']:.4f}\n")
 
             torch.save({
                 'model_state': model.state_dict(),
                 'optimizer_state': model.optimizer.state_dict(),
                 'step': step
             }, checkpoint_path)
-
-        x_batch, y_batch = get_batch('train')
-        logits, loss = model(x_batch, y_batch)
-
-        model.optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        model.optimizer.step()
     
     print("Training Complete")
 
 def predict():
-    checkpoint_path = "model_checkpoint.pt"
+    def checkpoint_path(epoch):
+        return f"model_checkpoint{epoch}.pt"
 
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
