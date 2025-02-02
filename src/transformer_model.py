@@ -2,40 +2,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
+import random
 import os
 
-vocab_size = 256
-batch_size = 64
-block_size = 32
-max_iters = 1000000
-eval_interval = 5000
-learning_rate = 1e-3
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_iters = 200
+from hyperparameters import *
 
-n_embd = 64
-n_head = 4
-n_layer = 4
-dropout = 0.0
-
+data_path = "cse447-project/datasets/train_af2.txt"
 checkpoint_path = "model_checkpoint.pt"
 input_file = "cse447-project/evaluation/input.txt"
 output_file = "cse447-project/evaluation/output.txt"
 
 encoding = 'utf-8'
 
-def encode(s: str) -> torch.tensor:
+def encode(s) -> torch.tensor:
     res = []
-    for c in s:
-        if ord(c) < vocab_size:
-            res.append(ord(c))
+    for line in s:
+        char_encode = []
+        for c in line:
+            if ord(c) < vocab_size:
+                char_encode.append(ord(c))
+        res.append(char_encode)
     return torch.tensor(res, dtype=torch.long)
 
 def decode(tensor: torch.Tensor) -> str:
     return ''.join(chr(c) for c in tensor.item())
 
-with open('cse447-project/datasets/shakespeare.txt', 'r', encoding=encoding) as f:
-    text = f.read()
+with open(data_path, 'r', encoding=encoding) as f:
+    text = f.readlines()
 
 data = encode(text)
 n = int(0.9*len(data))
@@ -44,9 +37,10 @@ val_data = data[n:]
 
 def get_batch(split):
     d = train_data if split == 'train' else val_data
-    ix = torch.randint(len(d) - block_size, (batch_size,))
-    x  = torch.stack([d[i : i+block_size]   for i in ix])
-    y  = torch.stack([d[i+1 : i+block_size+1] for i in ix])
+    for line in train_data:
+        idx = random.randint(0, len(line) - block_size) 
+        x = torch.stack(d[idx : idx+block_size])
+        y = torch.stack(d[idx+1 : idx+block_size+1])
     return x.to(device), y.to(device)
 
 class Transformer_Model(nn.Module):
@@ -58,7 +52,7 @@ class Transformer_Model(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=n_embd,
             nhead=n_head,
-            dim_feedforward=n_layer,
+            dim_feedforward=mlr_layer,
             dropout=dropout,
             activation="gelu",
             batch_first=True,
@@ -203,8 +197,8 @@ def predict():
             fout.write(line_str + "     " + top3_str + "\n")
 
 def main():
-    predict()
-    #train()
+    #predict()
+    train()
 
 if __name__ == "__main__":
     main()
