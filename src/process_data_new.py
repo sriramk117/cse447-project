@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 import os
-import string
 import random
 import torch
-import re
 from tqdm import tqdm
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datasets import load_dataset
 
 from hyperparameters import block_size
@@ -23,34 +20,43 @@ languages = [
     "yi", "yo", "zh-Hans", "zh-Hant", "zu",
 ]
 
-train_n = 1000000 #10000
+train_n = 100_000
 seed = 42
-buffer_size = 100000000
+buffer_size = 10_000
+write_batch_size = 10_000
+
 train_file_path = "cse447-project/datasets/train.txt"
-eval_file_path = "cse447-project/datasets/eval.txt"
 block_size = 128
 
-train_data = []
-for lang in tqdm(languages, desc="Processing languages"):
-    counter = 0
+with open(train_file_path, "w", encoding='utf-8') as train_file:
+    buffer = []
 
-    dataset = load_dataset('statmt/cc100', lang=lang, split='train', streaming=True, trust_remote_code=True)
-    shuffled_dataset = dataset.shuffle(seed=seed, buffer_size=buffer_size)
-    train_samples = shuffled_dataset.take(buffer_size)
+    for lang in tqdm(languages, desc="Processing languages"):
+        sample_count = 0
 
-    for item in train_samples:
-        sample = item["text"]
+        dataset = load_dataset('statmt/cc100', lang=lang, split='train', streaming=True, trust_remote_code=True)
 
-        if len(sample) > block_size + 1:
-            counter += 1
-            train_data.append(sample)
+        for item in dataset:
+            sample = item["text"]
 
-        if counter >= train_n:
-            break
+            if len(sample) > block_size + 1:
+                buffer.append(sample)
+                sample_count += 1
 
-print(len(train_data))
-random.shuffle(train_data)
+                if len(buffer) >= write_batch_size:
+                    train_file.writelines(buffer)
+                    buffer = []
 
-with open("cse447-project/datasets/train.txt", "w", encoding='utf-8') as train:
-    for line in train_data:
-        train.write(line)
+            if sample_count >= train_n:
+                break
+
+    if buffer:
+        train_file.writelines(buffer)
+
+with open(train_file_path, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+    print(len(lines))
+random.shuffle(lines)
+with open(train_file_path, "w", encoding="utf-8") as f:
+    f.writelines(lines)
+

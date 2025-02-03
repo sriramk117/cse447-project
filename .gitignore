@@ -1,3 +1,5 @@
 __pycache__/
 .env
 /datasets/train_af2.txt
+/datasets/train.txt
+/checkpoints/

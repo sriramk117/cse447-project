@@ -5,6 +5,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from tqdm import tqdm
 import random
 import os
+import gc
 
 from hyperparameters import *
 
@@ -32,8 +33,10 @@ def decode(tensor: torch.Tensor) -> str:
 
 with open(data_path, 'r', encoding=encoding) as f:
     text = f.readlines()
-
 data = encode(text)
+del text
+gc.collect()
+
 n = int(0.9*len(data))
 train_data = data[:n]
 val_data = data[n:]
@@ -42,7 +45,7 @@ def get_batch(split):
     d = train_data if split == 'train' else val_data
     x = []
     y = []
-    for line in tqdm(d, "Getting Batch"):
+    for line in tqdm(d, f"Getting {split} batch"):
         if len(line) <= block_size + 1:
             continue
         idx = random.randint(0, len(line) - block_size - 1)
@@ -50,10 +53,9 @@ def get_batch(split):
         y.append(line[idx+1 : idx+block_size+1])
     x_tensor = torch.stack(x)
     y_tensor = torch.stack(y)
-    return x_tensor.to(device), y_tensor.to(device)
-
-x_t, y_t = get_batch('train')
-x_v, y_v = get_batch('val')
+    del x, y
+    gc.collect()
+    return x_tensor, y_tensor
 
 class Transformer_Model(nn.Module):
     def __init__(self):
@@ -64,7 +66,7 @@ class Transformer_Model(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=n_embd,
             nhead=n_head,
-            dim_feedforward=mlp_layer,
+            dim_feedforward=mlp_layer_dim,
             dropout=dropout,
             activation="gelu",
             batch_first=True,
@@ -127,22 +129,24 @@ def estimate_loss(model):
     out = {}
     model.eval()
 
+    '''
     dataloader = DataLoader(TensorDataset(x_t, y_t), batch_size=batch_size)
     losses = []
     for xb, yb in tqdm(dataloader, "Loss estimation (Train)"):
         _, loss = model(xb, yb)
         losses.append(loss.item())
     out['train'] = sum(losses) / len(losses)
-
-    dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size)
+    '''
+    x_v, y_v = get_batch('val')
+    dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size, shuffle=True)
     losses = []
     for xb, yb in tqdm(dataloader, "Loss estimation (Val)"):
-        _, loss = model(xb, yb)
+        _, loss = model(xb.to(device), yb.to(device))
         losses.append(loss.item())
     out['val'] = sum(losses) / len(losses)
     model.train()
 
-    return out
+    return out['val']
 
 def train():
     model = Transformer_Model().to(device)
@@ -160,24 +164,26 @@ def train():
         print("No checkpoint")
 
     model.train()
-    train_dataloader = DataLoader(TensorDataset(x_t, y_t), batch_size=batch_size)
     for step in range(start_step, max_iters):
+        x_t, y_t = get_batch('train')
+        train_dataloader = DataLoader(TensorDataset(x_t, y_t), batch_size=batch_size, shuffle=True)
+
         for x_batch, y_batch in tqdm(train_dataloader, desc="Epoch Progress"):
-            logits, loss = model(x_batch, y_batch)
+            logits, loss = model(x_batch.to(device), y_batch.to(device))
 
             model.optimizer.zero_grad(set_to_none=True)
             loss.backward()
             model.optimizer.step()
 
         if step % eval_interval == 0 or step == max_iters - 1:
-            losses = estimate_loss(model)
-            print(f"Step {step}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            eval_loss = estimate_loss(model)
+            print(f"Step {step}: train loss {loss:.4f}, val loss {eval_loss:.4f}")
 
-            checkpoint_path = f"C:/Users/st3by/Documents/CSE447/cse447-project/checkpoints/model_checkpoint_{step}.pt"
+            checkpoint_path = f"C:/Users/st3by/Documents/CSE447/cse447-project/checkpoints/large_model_checkpoint_{step}.pt"
 
             log_path = "cse447-project/loss_log.txt"
             with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"Epoch {step}: Train Loss: {losses['train']:.4f}, Val Loss: {losses['val']:.4f}\n")
+                f.write(f"Epoch {step}: Train Loss: {loss:.4f}, Val Loss: {eval_loss:.4f}\n")
 
             torch.save({
                 'model_state': model.state_dict(),
