@@ -3,3 +3,4 @@ __pycache__/
 /datasets/train_af2.txt
 /datasets/train.txt
 /checkpoints/
+.venv/

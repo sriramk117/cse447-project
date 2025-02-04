@@ -9,7 +9,7 @@ import gc
 
 from hyperparameters import *
 
-data_path = "cse447-project/datasets/train_af2.txt"
+data_path = "cse447-project/datasets/shakespeare.txt"
 checkpoint_path = "model_checkpoint.pt"
 input_file = "cse447-project/evaluation/input.txt"
 output_file = "cse447-project/evaluation/output.txt"
@@ -125,7 +125,7 @@ def predict_next(model, idx):
     return top_indices, top_values
 
 @torch.no_grad()
-def estimate_loss(model):
+def evaluate(model):
     out = {}
     model.eval()
 
@@ -138,15 +138,36 @@ def estimate_loss(model):
     out['train'] = sum(losses) / len(losses)
     '''
     x_v, y_v = get_batch('val')
+    print(len(y_v))
     dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size, shuffle=True)
     losses = []
+    preds = []
     for xb, yb in tqdm(dataloader, "Loss estimation (Val)"):
         _, loss = model(xb.to(device), yb.to(device))
+        top_inds, _ = predict_next(model, xb.to(device))
+        # top 3 tokens
+        top_tokens = []
+        for i in range(3):
+            token_id = top_inds[0, i].item()
+            top_tokens.append(chr(token_id))
+        preds.append(top_tokens)
         losses.append(loss.item())
-    out['val'] = sum(losses) / len(losses)
+    out['val_loss'] = sum(losses) / len(losses)
+    
+    # Calculate accuracy
+    sum_acc = 0
+    
+    for i in range(len(preds)):
+        print(preds[i], chr(y_v[i, -1].item()))
+        for j in range(3):
+            if preds[i][j] == chr(y_v[i, -1].item()):
+                sum_acc += 1
+                break
+    out['val_acc'] = sum_acc / len(preds)
+
     model.train()
 
-    return out['val']
+    return out
 
 def train():
     model = Transformer_Model().to(device)
@@ -176,8 +197,10 @@ def train():
             model.optimizer.step()
 
         if step % eval_interval == 0 or step == max_iters - 1:
-            eval_loss = estimate_loss(model)
-            print(f"Step {step}: train loss {loss:.4f}, val loss {eval_loss:.4f}")
+            metrics = evaluate(model)
+            eval_loss = metrics['val_loss']
+            acc = metrics['val_acc']
+            print(f"Step {step}: train loss {loss:.4f}, val loss {eval_loss:.4f}, val acc {acc:.4f}")
 
             checkpoint_path = f"C:/Users/st3by/Documents/CSE447/cse447-project/checkpoints/large_model_checkpoint_{step}.pt"
 
