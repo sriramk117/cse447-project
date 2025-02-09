@@ -1,6 +1,6 @@
 __pycache__/
 .env
-/datasets/train_af2.txt
+/datasets/train_small.txt
 /datasets/train.txt
 /checkpoints/
 .venv/

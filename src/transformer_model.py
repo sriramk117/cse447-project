@@ -9,10 +9,11 @@ import gc
 
 from hyperparameters import *
 
-data_path = "cse447-project/datasets/shakespeare.txt"
-checkpoint_path = "model_checkpoint.pt"
+data_path = "cse447-project/datasets/train_small.txt"
+checkpoint_load_path = "cse447-project/checkpoints/large_model_checkpoint_39.pt"
 input_file = "cse447-project/evaluation/input.txt"
 output_file = "cse447-project/evaluation/output.txt"
+print(os.path.isfile(checkpoint_load_path))
 
 encoding = 'utf-8'
 
@@ -86,6 +87,7 @@ class Transformer_Model(nn.Module):
         # Assume x.shape = (B, T) and target.shape = (B, T)
         B, T = x.shape
 
+        #TODO: Truncate front instead of end
         if T > block_size:
             x = x[:, :block_size]
             T = block_size
@@ -116,9 +118,9 @@ class Transformer_Model(nn.Module):
         return logits, loss
 
 @torch.no_grad()
-def predict_next(model, idx):
+def predict_next(model, seq):
     model.eval()
-    logits, _ = model(idx)
+    logits, _ = model(seq)
     logits_last = logits[:, -1, :]
     probs = F.softmax(logits_last, dim=-1)
     top_values, top_indices = torch.topk(probs, k=3, dim=-1)
@@ -141,38 +143,26 @@ def evaluate(model):
     print(len(y_v))
     dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size, shuffle=True)
     losses = []
-    preds = []
+    sum_acc = 0
+    batch_acc = []
     for xb, yb in tqdm(dataloader, "Loss estimation (Val)"):
         _, loss = model(xb.to(device), yb.to(device))
-        top_inds, _ = predict_next(model, xb.to(device))
-        # top 3 tokens
-        top_tokens = []
-        for i in range(3):
-            token_id = top_inds[0, i].item()
-            top_tokens.append(chr(token_id))
-        preds.append(top_tokens)
         losses.append(loss.item())
-    out['val_loss'] = sum(losses) / len(losses)
-    
-    # Calculate accuracy
-    sum_acc = 0
-    
-    for i in range(len(preds)):
-        print(preds[i], chr(y_v[i, -1].item()))
-        for j in range(3):
-            if preds[i][j] == chr(y_v[i, -1].item()):
-                sum_acc += 1
-                break
-    out['val_acc'] = sum_acc / len(preds)
+        top_inds, _ = predict_next(model, xb.to(device))
 
-    model.train()
+        batch_correct = (yb[:, -1].view(-1, 1).to('cpu') == top_inds.to('cpu')).any(dim=1)
+        batch_acc.append(sum(batch_correct.float()))
+    
+    out['val_loss'] = sum(losses) / len(losses)
+    out['val_acc'] = (sum(batch_acc)/len(y_v)).item()
+    print(out)
 
     return out
 
 def train():
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
-    checkpoint_path = "cse447-project/checkpoints/model_checkpoint.pt"
+    checkpoint_path = checkpoint_load_path #"cse447-project/checkpoints/model_checkpoint.pt"
     
     start_step = 0
     if os.path.isfile(checkpoint_path):
@@ -223,8 +213,8 @@ def predict():
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
 
-    if os.path.isfile(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+    if os.path.isfile(checkpoint_load_path):
+        checkpoint = torch.load(checkpoint_load_path, map_location=device)
         model.load_state_dict(checkpoint['model_state'])
         model.optimizer.load_state_dict(checkpoint['optimizer_state'])
         start_step = checkpoint['step'] + 1
@@ -242,7 +232,7 @@ def predict():
                 fout.write("\n")
                 continue
 
-            line_ids = encode(line_str).to(device)
+            line_ids = torch.tensor(encode(line_str)).to(device)
             line_tensor = line_ids.unsqueeze(0)
 
             top_inds, top_vals = predict_next(model, line_tensor)
@@ -253,10 +243,29 @@ def predict():
                 top3_tokens.append(chr(token_id))
             top3_str = ''.join(top3_tokens)
             fout.write(line_str + "     " + top3_str + "\n")
+    
+def evaluate_accuracy():
+    model = Transformer_Model().to(device)
+    print(f"Params: {sum(p.numel() for p in model.parameters())}")
+    checkpoint_path = checkpoint_load_path #"cse447-project/checkpoints/model_checkpoint.pt"
+    
+    start_step = 0
+    if os.path.isfile(checkpoint_path):
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state'])
+        model.optimizer.load_state_dict(checkpoint['optimizer_state'])
+        start_step = checkpoint['step'] + 1
+        print(f"Checkpoint loaded at Step {start_step}")
+    else:
+        print("No checkpoint")
+
+    evaluate(model)
 
 def main():
-    #predict()
-    train()
+    #encode
+    predict()
+    #train()
+    #evaluate_accuracy()
 
 if __name__ == "__main__":
     main()
