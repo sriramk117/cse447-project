@@ -10,10 +10,10 @@ import argparse
 
 from hyperparameters import *
 
-data_path = "cse447-project/datasets/train_small.txt"
-checkpoint_load_path = "cse447-project/checkpoints/large_model_checkpoint_39.pt"
-input_file = "cse447-project/evaluation/input.txt"
-output_file = "cse447-project/evaluation/output.txt"
+data_path = ""
+checkpoint_load_path = ""
+input_file = ""
+output_file = ""
 print(os.path.isfile(checkpoint_load_path))
 
 encoding = 'utf-8'
@@ -33,15 +33,17 @@ def encode(s):
 def decode(tensor: torch.Tensor) -> str:
     return ''.join(chr(c) for c in tensor.item())
 
-with open(data_path, 'r', encoding=encoding) as f:
-    text = f.readlines()
-data = encode(text)
-del text
-gc.collect()
+#with open(data_path, 'r', encoding=encoding) as f:
+#    text = f.readlines()
+#data = encode(text)
+#del text
+#gc.collect()
 
-n = int(0.9*len(data))
-train_data = data[:n]
-val_data = data[n:]
+#n = int(0.9*len(data))
+#train_data = data[:n]
+#val_data = data[n:]
+train_data = []
+val_data = []
 
 def get_batch(split):
     d = train_data if split == 'train' else val_data
@@ -161,6 +163,7 @@ def evaluate(model):
     return out
 
 def train():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
     checkpoint_path = checkpoint_load_path #"cse447-project/checkpoints/model_checkpoint.pt"
@@ -207,13 +210,13 @@ def train():
     
     print("Training Complete")
 
-def predict(test_data, test_output):
+def predict(test_data, test_output, checkpoint_load_path):
     def checkpoint_path(epoch):
         return f"model_checkpoint{epoch}.pt"
 
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
-
+    print(checkpoint_load_path)
     if os.path.isfile(checkpoint_load_path):
         checkpoint = torch.load(checkpoint_load_path, map_location=device)
         model.load_state_dict(checkpoint['model_state'])
@@ -272,7 +275,8 @@ def main():
     if args.mode == 'train':
         train()
     elif args.mode == 'test':
-        predict(args.test_data, args.test_output)
+        checkpoint_load_path = "work/large_model_checkpoint_39.pt"
+        predict(args.test_data, args.test_output, checkpoint_load_path)
     #encode
     #train()
     #evaluate_accuracy()
