@@ -6,6 +6,7 @@ from tqdm import tqdm
 import random
 import os
 import gc
+import argparse
 
 from hyperparameters import *
 
@@ -206,7 +207,7 @@ def train():
     
     print("Training Complete")
 
-def predict():
+def predict(test_data, test_output):
     def checkpoint_path(epoch):
         return f"model_checkpoint{epoch}.pt"
 
@@ -223,8 +224,8 @@ def predict():
         print("No checkpoint found. Using untrained model.")
 
     model.eval()
-    with open(input_file, "r", encoding=encoding) as fin, \
-         open(output_file, "w", encoding=encoding) as fout:
+    with open(test_data, "r", encoding=encoding) as fin, \
+         open(test_output, "w", encoding=encoding) as fout:
         
         for line in fin:
             line_str = line.strip()
@@ -235,14 +236,14 @@ def predict():
             line_ids = torch.tensor(encode(line_str)).to(device)
             line_tensor = line_ids.unsqueeze(0)
 
-            top_inds, top_vals = predict_next(model, line_tensor)
+            top_inds, _ = predict_next(model, line_tensor)
 
             top3_tokens = []
             for i in range(3):
                 token_id = top_inds[0, i].item()
                 top3_tokens.append(chr(token_id))
             top3_str = ''.join(top3_tokens)
-            fout.write(line_str + "     " + top3_str + "\n")
+            fout.write(top3_str + "\n")
     
 def evaluate_accuracy():
     model = Transformer_Model().to(device)
@@ -262,8 +263,17 @@ def evaluate_accuracy():
     evaluate(model)
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=('train', 'test'), help='what to run')
+    parser.add_argument('--work_dir', help='where to save', default='work')
+    parser.add_argument('--test_data', help='path to test data', default='example/input.txt')
+    parser.add_argument('--test_output', help='path to write test predictions', default='pred.txt')
+    args = parser.parse_args()
+    if args.mode == 'train':
+        train()
+    elif args.mode == 'test':
+        predict(args.test_data, args.test_output)
     #encode
-    predict()
     #train()
     #evaluate_accuracy()
 
