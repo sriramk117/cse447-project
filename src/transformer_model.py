@@ -17,18 +17,17 @@ output_file = ""
 print(os.path.isfile(checkpoint_load_path))
 
 encoding = 'utf-8'
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def encode(s):
-    res = [] 
-    for line in tqdm(s, "Encoding"):
-        if "\n" in line:
-            line = line.rstrip("\n")
-        char_encode = []
-        for c in line:
-            if ord(c) < vocab_size:
-                char_encode.append(ord(c))
-        res.append(torch.tensor(char_encode, dtype=torch.long))
-    return res
+    line = s
+    if "\n" in s:
+        line = s.rstrip("\n")
+    char_encode = []
+    for c in line:
+        if ord(c) < vocab_size:
+            char_encode.append(ord(c))
+    return torch.tensor(char_encode, dtype=torch.long)
 
 def decode(tensor: torch.Tensor) -> str:
     return ''.join(chr(c) for c in tensor.item())
