@@ -179,6 +179,42 @@ def train():
     
     print("Training Complete")
 
+def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
+
+    model = Transformer_Model().to(device)
+    print(f"Params: {sum(p.numel() for p in model.parameters())}")
+    print(checkpoint_load_path)
+    if os.path.isfile(checkpoint_load_path):
+        checkpoint = torch.load(checkpoint_load_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state'])
+        model.optimizer.load_state_dict(checkpoint['optimizer_state'])
+        start_step = checkpoint['step'] + 1
+        print(f"Checkpoint loaded at Step {start_step}")
+    else:
+        print("No checkpoint found. Using untrained model.")
+
+    model.eval()
+    with open(test_data, "r", encoding=encoding) as fin, \
+         open(test_output, "w", encoding=encoding) as fout:
+        
+        for line in fin:
+            line_str = line.strip()
+            if not line_str:
+                fout.write("\n")
+                continue
+
+            line_ids = encode_line(line_str).to(device)
+            line_tensor = line_ids.unsqueeze(0)
+
+            top_inds, _ = predict_next(model, line_tensor)
+
+            top3_tokens = []
+            for i in range(3):
+                token_id = top_inds[0, i].item()
+                top3_tokens.append(chr(token_id))
+            top3_str = ''.join(top3_tokens)
+            fout.write(top3_str + "\n")
+
 def main():
     train()
 

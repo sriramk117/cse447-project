@@ -21,9 +21,13 @@ Is but the seemly raim
 Which in thy breas
 How can I then be elde
 
+<<<<<<< HEAD
 
 That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step That’s one small step bu
 
 a
 
 bruh what's your nam
+=======
+Question: Who is the 23rd president of the United States? Answer: 
+>>>>>>> cf698f5ca03d155dfec6f665147aca8294e4bee6
