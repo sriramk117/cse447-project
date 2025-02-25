@@ -7,6 +7,7 @@ import random
 import os
 import gc
 import argparse
+import numpy as np
 
 from hyperparameters import *
 
@@ -14,7 +15,7 @@ data_path = ""
 checkpoint_load_path = ""
 input_file = ""
 output_file = ""
-print(os.path.isfile(checkpoint_load_path))
+#print(os.path.isfile(checkpoint_load_path))
 
 encoding = 'utf-8'
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -27,7 +28,7 @@ def encode(s):
     for c in line:
         if ord(c) < vocab_size:
             char_encode.append(ord(c))
-    return torch.tensor(char_encode, dtype=torch.long)
+    return char_encode
 
 def decode(tensor: torch.Tensor) -> str:
     return ''.join(chr(c) for c in tensor.item())
@@ -142,7 +143,7 @@ def evaluate(model):
     out['train'] = sum(losses) / len(losses)
     '''
     x_v, y_v = get_batch('val')
-    print(len(y_v))
+    #print(len(y_v))
     dataloader = DataLoader(TensorDataset(x_v, y_v), batch_size=batch_size, shuffle=True)
     losses = []
     sum_acc = 0
@@ -157,14 +158,14 @@ def evaluate(model):
     
     out['val_loss'] = sum(losses) / len(losses)
     out['val_acc'] = (sum(batch_acc)/len(y_v)).item()
-    print(out)
+    #print(out)
 
     return out
 
 def train():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = Transformer_Model().to(device)
-    print(f"Params: {sum(p.numel() for p in model.parameters())}")
+    #print(f"Params: {sum(p.numel() for p in model.parameters())}")
     checkpoint_path = checkpoint_load_path #"cse447-project/checkpoints/model_checkpoint.pt"
     
     start_step = 0
@@ -173,7 +174,7 @@ def train():
         model.load_state_dict(checkpoint['model_state'])
         model.optimizer.load_state_dict(checkpoint['optimizer_state'])
         start_step = checkpoint['step'] + 1
-        print(f"Checkpoint loaded at Step {start_step}")
+        #print(f"Checkpoint loaded at Step {start_step}")
     else:
         print("No checkpoint")
 
@@ -193,7 +194,7 @@ def train():
             metrics = evaluate(model)
             eval_loss = metrics['val_loss']
             acc = metrics['val_acc']
-            print(f"Step {step}: train loss {loss:.4f}, val loss {eval_loss:.4f}, val acc {acc:.4f}")
+            #print(f"Step {step}: train loss {loss:.4f}, val loss {eval_loss:.4f}, val acc {acc:.4f}")
 
             checkpoint_path = f"C:/Users/st3by/Documents/CSE447/cse447-project/checkpoints/large_model_checkpoint_{step}.pt"
 
@@ -207,21 +208,21 @@ def train():
                 'step': step
             }, checkpoint_path)
     
-    print("Training Complete")
+    #print("Training Complete")
 
 def predict(test_data, test_output, checkpoint_load_path):
     def checkpoint_path(epoch):
         return f"model_checkpoint{epoch}.pt"
 
     model = Transformer_Model().to(device)
-    print(f"Params: {sum(p.numel() for p in model.parameters())}")
-    print(checkpoint_load_path)
+    #print(f"Params: {sum(p.numel() for p in model.parameters())}")
+    #print(checkpoint_load_path)
     if os.path.isfile(checkpoint_load_path):
         checkpoint = torch.load(checkpoint_load_path, map_location=device)
         model.load_state_dict(checkpoint['model_state'])
         model.optimizer.load_state_dict(checkpoint['optimizer_state'])
         start_step = checkpoint['step'] + 1
-        print(f"Checkpoint loaded at Step {start_step}")
+        #print(f"Checkpoint loaded at Step {start_step}")
     else:
         print("No checkpoint found. Using untrained model.")
 
@@ -235,7 +236,14 @@ def predict(test_data, test_output, checkpoint_load_path):
                 fout.write("\n")
                 continue
 
-            line_ids = torch.tensor(encode(line_str)).to(device)
+            try:
+                line_ids = torch.tensor(encode(line_str)).to(device)
+            except TypeError:
+                #print(f"Error encoding line: {line_str}")
+                randoms = [random.randint(0, vocab_size-1) for _ in range(len(line_str))]
+                line_ids = torch.tensor(randoms).to(device)
+                continue
+
             line_tensor = line_ids.unsqueeze(0)
 
             top_inds, _ = predict_next(model, line_tensor)
@@ -249,7 +257,7 @@ def predict(test_data, test_output, checkpoint_load_path):
     
 def evaluate_accuracy():
     model = Transformer_Model().to(device)
-    print(f"Params: {sum(p.numel() for p in model.parameters())}")
+    #print(f"Params: {sum(p.numel() for p in model.parameters())}")
     checkpoint_path = checkpoint_load_path #"cse447-project/checkpoints/model_checkpoint.pt"
     
     start_step = 0
@@ -258,7 +266,7 @@ def evaluate_accuracy():
         model.load_state_dict(checkpoint['model_state'])
         model.optimizer.load_state_dict(checkpoint['optimizer_state'])
         start_step = checkpoint['step'] + 1
-        print(f"Checkpoint loaded at Step {start_step}")
+        #print(f"Checkpoint loaded at Step {start_step}")
     else:
         print("No checkpoint")
 
