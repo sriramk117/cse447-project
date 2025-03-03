@@ -230,12 +230,12 @@ def main():
     parser.add_argument('--work_dir', help='where to save', default='work')
     parser.add_argument('--test_data', help='path to test data', default='example/input.txt')
     parser.add_argument('--test_output', help='path to write test predictions', default='pred.txt')
-    parser.add_argument('--checkpoint_load_path', help='path to load checkpoint', default='work/large_model_checkpoint_6.pt')
     args = parser.parse_args()
     if args.mode == 'train':
         train()
     elif args.mode == 'test':
-        predict(args.test_data, args.test_output, args.checkpoint_load_path)
+        checkpoint_load_path = "work/large_model_checkpoint_6.pt"
+        predict(args.test_data, args.test_output, checkpoint_load_path)
 
 if __name__ == "__main__":
     main()
