@@ -282,7 +282,7 @@ def main():
     if args.mode == 'train':
         train()
     elif args.mode == 'test':
-        checkpoint_load_path = "work/large_model_checkpoint_39.pt"
+        checkpoint_load_path = "work/large_model_checkpoint_6.pt"
         predict(args.test_data, args.test_output, checkpoint_load_path)
     #encode
     #train()

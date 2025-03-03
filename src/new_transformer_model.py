@@ -6,6 +6,7 @@ from tqdm import tqdm
 import os
 import random
 import time
+import argparse
 
 from hyperparameters import *
 from config import *
@@ -184,6 +185,7 @@ def train():
     print("Training Complete")
 
 def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
+    start_time = time.time()
 
     model = Transformer_Model().to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters())}")
@@ -218,9 +220,22 @@ def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
                 top3_tokens.append(chr(token_id))
             top3_str = ''.join(top3_tokens)
             fout.write(top3_str + "\n")
+    elapsed_time = time.time() - start_time
+    print(f"Elapsed Time For Entire Test Dataset: {elapsed_time:.4f}")
 
 def main():
-    train()
+    #train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('mode', choices=('train', 'test'), help='what to run')
+    parser.add_argument('--work_dir', help='where to save', default='work')
+    parser.add_argument('--test_data', help='path to test data', default='example/input.txt')
+    parser.add_argument('--test_output', help='path to write test predictions', default='pred.txt')
+    parser.add_argument('--checkpoint_load_path', help='path to load checkpoint', default='work/large_model_checkpoint_6.pt')
+    args = parser.parse_args()
+    if args.mode == 'train':
+        train()
+    elif args.mode == 'test':
+        predict(args.test_data, args.test_output, args.checkpoint_load_path)
 
 if __name__ == "__main__":
     main()
