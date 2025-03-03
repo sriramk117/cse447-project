@@ -5,6 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import os
 import random
+import time
 
 from hyperparameters import *
 from config import *
@@ -105,11 +106,14 @@ def encode_line(line):
 
 @torch.no_grad()
 def predict_next(model, seq):
+    start_time = time.time()
     model.eval()
     logits, _ = model(seq)
     logits_last = logits[:, -1, :]
     probs = F.softmax(logits_last, dim=-1)
     top_values, top_indices = torch.topk(probs, k=3, dim=-1)
+    elapsed_time = time.time() - start_time
+    print(f"Prediction Time: {elapsed_time:.4f}")
     return top_indices, top_values
 
 @torch.no_grad()
