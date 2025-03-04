@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
+import torch.ao.quantization as quant
 from tqdm import tqdm
 import os
 import random
@@ -114,7 +115,7 @@ def predict_next(model, seq):
     probs = F.softmax(logits_last, dim=-1)
     top_values, top_indices = torch.topk(probs, k=3, dim=-1)
     elapsed_time = time.time() - start_time
-    print(f"Prediction Time: {elapsed_time:.4f}")
+    #print(f"Prediction Time: {elapsed_time:.4f}")
     return top_indices, top_values
 
 @torch.no_grad()
@@ -194,8 +195,8 @@ def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
         checkpoint = torch.load(checkpoint_load_path, map_location=device)
         model.load_state_dict(checkpoint['model_state'])
         model.optimizer.load_state_dict(checkpoint['optimizer_state'])
-        start_step = checkpoint['step'] + 1
-        print(f"Checkpoint loaded at Step {start_step}")
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"Checkpoint loaded at Epoch {start_epoch}")
     else:
         print("No checkpoint found. Using untrained model.")
 
@@ -208,8 +209,12 @@ def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
             if not line_str:
                 fout.write("\n")
                 continue
-
-            line_ids = encode_line(line_str).to(device)
+            
+            line_ids = encode_line(line_str)
+            if len(line_ids) == 0:
+                fout.write("aeo\n")
+                continue
+            line_ids = torch.tensor(line_ids).to(device)
             line_tensor = line_ids.unsqueeze(0)
 
             top_inds, _ = predict_next(model, line_tensor)
@@ -221,7 +226,7 @@ def predict(test_data, test_output, checkpoint_load_path, device="cpu"):
             top3_str = ''.join(top3_tokens)
             fout.write(top3_str + "\n")
     elapsed_time = time.time() - start_time
-    print(f"Elapsed Time For Entire Test Dataset: {elapsed_time:.4f}")
+    #print(f"Elapsed Time For Entire Test Dataset: {elapsed_time:.4f}")
 
 def main():
     #train()
